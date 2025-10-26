@@ -1,1 +1,91 @@
-* @Naturalclar
+// Darwaza-Khidki Estimate App // Single-file React Native app (App.js) // Instructions: // 1) Requires: react-native, @react-native-picker/picker, @react-native-async-storage/async-storage // 2) Install: npm install @react-native-picker/picker @react-native-async-storage/async-storage // 3) Run with: npx react-native run-android  (or ios)
+
+import React, { useState, useEffect } from 'react'; import { SafeAreaView, View, Text, TextInput, TouchableOpacity, FlatList, Alert, StyleSheet, Share, Platform, } from 'react-native'; import { Picker } from '@react-native-picker/picker'; import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const STORAGE_KEY = '@quotes_list_v1';
+
+export default function App() { const [lang, setLang] = useState('hi'); // 'hi' or 'en' const [type, setType] = useState('darwaza'); const [height, setHeight] = useState(''); const [width, setWidth] = useState(''); const [rate, setRate] = useState('1500'); const [labour, setLabour] = useState('500'); const [quotes, setQuotes] = useState([]);
+
+useEffect(() => { loadQuotes(); }, []);
+
+const loadQuotes = async () => { try { const json = await AsyncStorage.getItem(STORAGE_KEY); if (json) setQuotes(JSON.parse(json)); } catch (e) { console.warn('Load failed', e); } };
+
+const saveQuotes = async (next) => { try { await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next)); setQuotes(next); } catch (e) { console.warn('Save failed', e); } };
+
+const parseNumber = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
+
+const estimate = () => { const h = parseNumber(height) / 100; // meters const w = parseNumber(width) / 100; // meters const area = h * w; const materialRate = parseNumber(rate); const material = Number((area * materialRate).toFixed(2)); const labourCost = parseNumber(labour); const gst = Number((0.18 * (material + labourCost)).toFixed(2)); const total = Number((material + labourCost + gst).toFixed(2));
+
+return { area: Number(area.toFixed(3)), material, labour: labourCost, gst, total };
+
+};
+
+const handleAddQuote = async () => { if (!height || !width) { Alert.alert(lang === 'hi' ? 'खाली फील्ड' : 'Missing fields', lang === 'hi' ? 'ऊँचाई और चौड़ाई डालें' : 'Enter height and width'); return; } const est = estimate(); const item = { id: Date.now().toString(), type, height, width, rate, labour, ...est, createdAt: new Date().toISOString(), }; const next = [item, ...quotes]; await saveQuotes(next); setHeight(''); setWidth(''); Alert.alert(lang === 'hi' ? 'अनुमान जोड़ा' : 'Estimate saved', ${lang==='hi'?'कुल':'Total'}: ₹${item.total}); };
+
+const handleDelete = (id) => { Alert.alert( lang === 'hi' ? 'पुष्टि करें' : 'Confirm', lang === 'hi' ? 'क्या आप हटाना चाहते हैं?' : 'Delete this quote?', [ { text: lang === 'hi' ? 'नहीं' : 'No' }, { text: lang === 'hi' ? 'हां' : 'Yes', onPress: async () => { const next = quotes.filter((q) => q.id !== id); await saveQuotes(next); }, }, ] ); };
+
+const handleShare = async (q) => { const text = ${lang==='hi'?'प्रकार':'Type'}: ${q.type}\n${lang==='hi'?'आकार':'Size'}: ${q.height}x${q.width} cm\n${lang==='hi'?'क्षेत्रफल':'Area'}: ${q.area} m²\n${lang==='hi'?'सामग्री':'Material'}: ₹${q.material}\n${lang==='hi'?'श्रम':'Labour'}: ₹${q.labour}\nGST: ₹${q.gst}\n${lang==='hi'?'कुल':'Total'}: ₹${q.total}; try { await Share.share({ message: text, title: lang==='hi'?'अनुमान शेयर करें':'Share estimate' }); } catch (e) { console.warn('Share failed', e); } };
+
+const renderItem = ({ item }) => ( <View style={styles.card}> <View style={{flex:1}}> <Text style={styles.cardTitle}>{item.type} — {item.height} x {item.width} cm</Text> <Text style={styles.small}>Area: {item.area} m² • Total: ₹{item.total}</Text> <Text style={styles.small}>{new Date(item.createdAt).toLocaleString()}</Text> </View> <View style={styles.cardButtons}> <TouchableOpacity style={styles.btn} onPress={() => handleShare(item)}> <Text style={styles.btnText}>{lang==='hi'?'शेयर':'Share'}</Text> </TouchableOpacity> <TouchableOpacity style={[styles.btn, {backgroundColor:'#ff6b6b'}]} onPress={() => handleDelete(item.id)}> <Text style={styles.btnText}>{lang==='hi'?'हटाएँ':'Delete'}</Text> </TouchableOpacity> </View> </View> );
+
+const clearAll = () => { Alert.alert(lang==='hi'?'साफ़ करें':'Clear all', lang==='hi'?'सभी रिकॉर्ड हटाएँ?':'Remove all saved quotes?', [ { text: lang==='hi'?'नहीं':'No' }, { text: lang==='hi'?'हां':'Yes', onPress: async () => await saveQuotes([]) }, ]); };
+
+const t = (h, e) => (lang === 'hi' ? h : e);
+
+return ( <SafeAreaView style={styles.container}> <View style={styles.header}> <Text style={styles.title}>{t('दरवाज़ा/खिड़की अनुमान','Door/Window Estimator')}</Text> <View style={styles.row}> <TouchableOpacity style={styles.langBtn} onPress={() => setLang(lang==='hi'?'en':'hi')}> <Text style={styles.langText}>{lang==='hi'?'EN':'हिंदी'}</Text> </TouchableOpacity> </View> </View>
+
+<View style={styles.form}>
+    <Text style={styles.label}>{t('प्रकार','Type')}</Text>
+    <View style={styles.pickerWrap}>
+      <Picker selectedValue={type} onValueChange={(v)=>setType(v)}>
+        <Picker.Item label={t('दरवाज़ा','Door')} value="darwaza" />
+        <Picker.Item label={t('खिड़की','Window')} value="khidki" />
+        <Picker.Item label={t('शीशा','Glass')} value="sheesha" />
+      </Picker>
+    </View>
+
+    <View style={styles.rowInputs}>
+      <TextInput placeholder={t('ऊँचाई (cm)','Height (cm)')} keyboardType='numeric' value={height} onChangeText={setHeight} style={styles.input} />
+      <TextInput placeholder={t('चौड़ाई (cm)','Width (cm)')} keyboardType='numeric' value={width} onChangeText={setWidth} style={styles.input} />
+    </View>
+
+    <View style={styles.rowInputs}>
+      <TextInput placeholder={t('सामग्री दर प्रति m²','Material rate per m²')} keyboardType='numeric' value={rate} onChangeText={setRate} style={styles.input} />
+      <TextInput placeholder={t('श्रम (₹)','Labour (₹)')} keyboardType='numeric' value={labour} onChangeText={setLabour} style={styles.input} />
+    </View>
+
+    <View style={styles.actionsRow}>
+      <TouchableOpacity style={styles.primaryBtn} onPress={handleAddQuote}>
+        <Text style={styles.primaryText}>{t('अनुमान जोड़ें','Save estimate')}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={styles.secondaryBtn} onPress={() => Alert.alert('Estimate', JSON.stringify(estimate()))}>
+        <Text style={styles.secondaryText}>{t('तुरंत देखें','Quick estimate')}</Text>
+      </TouchableOpacity>
+    </View>
+
+  </View>
+
+  <View style={styles.listHeader}>
+    <Text style={styles.sectionTitle}>{t('बचाए गए अनुमान','Saved estimates')}</Text>
+    <TouchableOpacity onPress={clearAll}>
+      <Text style={{color:'#ff4d4d'}}>{t('साफ़ करें','Clear')}</Text>
+    </TouchableOpacity>
+  </View>
+
+  <FlatList
+    data={quotes}
+    keyExtractor={(i) => i.id}
+    renderItem={renderItem}
+    contentContainerStyle={{paddingBottom:80}}
+    ListEmptyComponent={<Text style={{textAlign:'center',marginTop:20}}>{t('कोई रिकॉर्ड नहीं','No records yet')}</Text>}
+  />
+
+  <View style={styles.footer}>
+    <Text style={styles.footerText}>Made with ❤️</Text>
+  </View>
+</SafeAreaView>
+
+); }
+
+const styles = StyleSheet.create({ container: { flex: 1, backgroundColor: '#fff', padding: 12 }, header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }, title: { fontSize: 20, fontWeight: '700' }, langBtn: { padding: 8, borderRadius: 6, backgroundColor: '#eee' }, langText: { fontWeight: '600' }, form: { backgroundColor: '#fafafa', padding: 10, borderRadius: 8, marginBottom: 10 }, label: { fontWeight: '600', marginBottom: 6 }, pickerWrap: { borderWidth: 1, borderColor: '#ddd', borderRadius: 6, overflow: 'hidden', marginBottom: 8 }, rowInputs: { flexDirection: 'row', justifyContent: 'space-between' }, input: { flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 6, padding: 8, marginRight: 8, marginBottom: 8 }, actionsRow: { flexDirection: 'row', justifyContent: 'space-between' }, primaryBtn: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#2b8aef', marginRight: 8, alignItems: 'center' }, primaryText: { color: '#fff', fontWeight: '700' }, secondaryBtn: { padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#2b8aef', flex: 1, alignItems: 'center' }, secondaryText: { color: '#2b8aef', fontWeight: '700' }, listHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }, sectionTitle: { fontWeight: '700' }, card: { flexDirection: 'row', padding: 10, borderRadius: 8, backgroundColor: '#fff', marginTop: 10, borderWidth: 1, borderColor: '#eee' }, cardTitle: { fontWeight: '700' }, small: { color: '#666', marginTop: 4 }, cardButtons: { justifyContent: 'space-between' }, btn: { padding: 8, borderRadius: 6, backgroundColor: '#2b8aef', marginBottom: 6 }, btnText: { color: '#fff' }, footer: { position: 'absolute', bottom: 8, left: 0, right: 0, alignItems: 'center' }, footerText: { color: '#999' }, });
+
